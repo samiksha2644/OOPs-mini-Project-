@@ -1,7 +1,5 @@
 # OOPs-mini-Project-
 
-Here is a simple README file for your project. You can copy and paste this into a file named README.md in your project folder.
-
 Supermart Billing System (Java)
 This is a simple, console-based Supermart Billing System written in Java. It was developed as a mini-project to apply and demonstrate fundamental Object-Oriented Programming (OOP) concepts.
 
