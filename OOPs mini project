@@ -1,0 +1,535 @@
+import java.util.Scanner;
+
+//---------------------------------------------------------------------
+// BILLINGSYSTEM CLASS (Main Class)
+//---------------------------------------------------------------------
+/**
+ * ABSTRACTION: This is the main class that hides all the
+ * complexity from the 'main' method.
+ */
+
+public class BillingSystem {
+    private Stock stock;
+    // Replaced List with a simple array for users
+    private User[] users = new User[10]; // Max 10 users
+    private int userCount = 0;
+    
+    private User currentUser;
+    private Scanner scanner;
+
+    public BillingSystem() {
+        stock = new Stock();
+        scanner = new Scanner(System.in);
+        loadInitialData();
+    }
+
+    // Public getter for Stock
+    public Stock getStock() {
+        return stock;
+    }
+
+    private void loadInitialData() {
+        // Add users to the array
+        users[userCount++] = new Admin("admin", "admin123");
+        users[userCount++] = new Cashier("cashier", "cashier123");
+
+        // Add products to stock
+        stock.addProduct(new Product("101", "Milk", 52.50), 100);
+        stock.addProduct(new Product("102", "Bread", 40.00), 80);
+        stock.addProduct(new TaxableProduct("201", "Laptop", 50000.00, 0.18), 10);
+    }
+
+    private boolean handleLogin() {
+        System.out.println("\n--- Login ---");
+        System.out.print("Username: ");
+        String username = scanner.nextLine();
+        System.out.print("Password: ");
+        String password = scanner.nextLine();
+
+        // Loop through the users array
+        for (int i = 0; i < userCount; i++) {
+            if (users[i].login(username, password)) {
+                currentUser = users[i]; // POLYMORPHISM
+                System.out.println("Login Successful. Welcome, " + currentUser.username);
+                return true;
+            }
+        }
+        System.out.println("Login Failed! Invalid credentials.");
+        return false;
+    }
+
+    private void handleLogout() {
+        System.out.println("Logging out " + currentUser.username + "...");
+        currentUser = null;
+    }
+
+    // --- Admin helper method ---
+    public void adminAddProduct(Scanner scanner) {
+        System.out.println("\n--- Add New Product ---");
+        System.out.print("Enter Product ID: ");
+        String id = scanner.nextLine();
+        
+        // Check if product ID already exists
+        if (stock.getProductById(id) != null) {
+            System.out.println("Error: This Product ID already exists.");
+            return;
+        }
+        
+        System.out.print("Enter Product Name: ");
+        String name = scanner.nextLine();
+        System.out.print("Enter Price: ");
+        double price = scanner.nextDouble(); // Use nextDouble()
+        System.out.print("Enter Quantity: ");
+        int quantity = scanner.nextInt(); // Use nextInt()
+        System.out.print("Is this product taxable? (1=Yes, 0=No): ");
+        int choice = scanner.nextInt();
+        scanner.nextLine(); // Consume the newline
+
+        if (choice == 1) {
+            System.out.print("Enter Tax Rate (e.g., 0.05 for 5%): ");
+            double taxRate = scanner.nextDouble();
+            scanner.nextLine(); // Consume the newline
+            stock.addProduct(new TaxableProduct(id, name, price, taxRate), quantity);
+        } else {
+            stock.addProduct(new Product(id, name, price), quantity);
+        }
+    }
+
+    // --- Cashier helper method ---
+    public void cashierCreateInvoice(Scanner scanner) {
+        System.out.println("\n--- Create New Invoice ---");
+        System.out.print("Enter Customer Name: ");
+        String custName = scanner.nextLine();
+        System.out.print("Enter Customer Contact: ");
+        String custContact = scanner.nextLine();
+
+        Invoice invoice = new Invoice(custName, custContact);
+
+        String addMore = "yes";
+        
+        // Use a 'while' loop instead of 'do-while'
+        while (addMore.equals("yes") || addMore.equals("y")) {
+            stock.viewStock();
+            System.out.print("\nEnter Product ID to add: ");
+            String productId = scanner.nextLine();
+
+            Product product = stock.getProductById(productId);
+            if (product == null) {
+                System.out.println("Error: Invalid Product ID.");
+            } else {
+                System.out.print("Enter Quantity: ");
+                int quantity = scanner.nextInt();
+                scanner.nextLine(); // Consume the newline
+
+                if (!stock.isStockAvailable(productId, quantity)) {
+                    System.out.println("Error: Not enough stock.");
+                } else {
+                    invoice.addItem(product, quantity);
+                    stock.decreaseStock(productId, quantity);
+                }
+            }
+            
+            System.out.print("Add another item? (yes/no): ");
+            addMore = scanner.nextLine();
+        }
+
+        System.out.println("Finalizing Invoice...");
+        invoice.calculateTotal();
+        invoice.printInvoice();
+    }
+
+    // ABSTRACTION: The main run loop.
+    public void run() {
+        while (true) {
+            if (currentUser == null) {
+                // Not logged in
+                System.out.println("\nWELCOME TO THE SUPERMART BILLING SYSTEM");
+                System.out.println("  1. Login");
+                System.out.println("  2. Exit");
+                System.out.print("Enter your choice: ");
+                
+                int choice = scanner.nextInt();
+                scanner.nextLine(); // Consume the newline
+
+                if (choice == 1) {
+                    handleLogin();
+                } else if (choice == 2) {
+                    System.out.println("Thank you! Exiting system.");
+                    break;
+                }
+            } else {
+                // Logged in
+                // POLYMORPHISM: Calls the correct showMenu()
+                currentUser.showMenu(scanner, this);
+                handleLogout(); // Automatically log out
+            }
+        }
+        scanner.close(); // Close the scanner at the end
+    }
+
+    // --- Main Entry Point ---
+    public static void main(String[] args) {
+        // ABSTRACTION: The main method is very simple.
+        BillingSystem supermart = new BillingSystem();
+        supermart.run();
+    }
+}
+
+
+//---------------------------------------------------------------------
+// 1. PRODUCT CLASS (Encapsulation and Polymorphism)
+//---------------------------------------------------------------------
+class Product {
+    // ENCAPSULATION: Variables are 'private'
+    private String id;
+    private String name;
+    protected double price;
+
+    public Product(String id, String name, double price) {
+        this.id = id;
+        this.name = name;
+        this.price = price;
+    }
+
+    // --- Encapsulation: Public 'getter' methods ---
+    public String getId() { return id; }
+    public String getName() { return name; }
+    public double getPrice() { return price; }
+
+    /**
+     * POLYMORPHISM: This method can be overridden by child classes.
+     * It calculates the final price.
+     */
+    public double getFinalPrice(int quantity) {
+        return price * quantity;
+    }
+
+    /**
+     * POLYMORPHISM: This method can be overridden.
+     * It shows the product's details.
+     */
+    public void display() {
+        // Use tabs (\t) for simple spacing instead of fancy formatting
+        System.out.println(id + "\t" + name + "\t" + price);
+    }
+}
+
+//---------------------------------------------------------------------
+// 2. TAXABLEPRODUCT CLASS (Inheritance)
+//---------------------------------------------------------------------
+/**
+ * INHERITANCE: TaxableProduct 'extends' Product.
+ * It inherits id, name, price, and all methods.
+ */
+class TaxableProduct extends Product {
+    private double taxRate; // e.g., 0.05 for 5%
+
+    public TaxableProduct(String id, String name, double price, double taxRate) {
+        // 'super' calls the constructor of the parent class (Product)
+        super(id, name, price);
+        this.taxRate = taxRate;
+    }
+
+    /**
+     * POLYMORPHISM (Override): This REPLACES the parent's getFinalPrice method.
+     */
+    @Override
+    public double getFinalPrice(int quantity) {
+        double basePrice = price * quantity;
+        double tax = basePrice * taxRate;
+        return basePrice + tax;
+    }
+
+    /**
+     * POLYMORPHISM (Override): This REPLACES the parent's display method.
+     */
+    @Override
+    public void display() {
+        // 'super' calls the method from the parent class (Product)
+        super.display();
+        // Add the tax rate to the display
+        System.out.println("\t(Tax: " + (taxRate * 100) + "%)");
+    }
+}
+
+//---------------------------------------------------------------------
+// 3. LINEITEM CLASS (Encapsulation)
+//---------------------------------------------------------------------
+/**
+ * ENCAPSULATION: A simple helper class to store a
+ * purchased product and its quantity.
+ */
+class LineItem {
+    private Product product;
+    private int quantity;
+
+    public LineItem(Product product, int quantity) {
+        this.product = product;
+        this.quantity = quantity;
+    }
+
+    public Product getProduct() { return product; }
+    public int getQuantity() { return quantity; }
+}
+
+//---------------------------------------------------------------------
+// 4. STOCK CLASS (Encapsulation with Arrays)
+//---------------------------------------------------------------------
+/**
+ * ENCAPSULATION: Manages the inventory using simple arrays.
+ */
+class Stock {
+    // Replaced Map with simple arrays.
+    // We set a maximum number of products the store can hold.
+    protected Product[] productList = new Product[50];
+    protected int[] productQuantity = new int[50];
+    protected int productCount = 0; // Tracks how many products we have added
+
+    public void addProduct(Product product, int quantity) {
+        if (productCount < productList.length) {
+            productList[productCount] = product;
+            productQuantity[productCount] = quantity;
+            productCount++; // Increment the count
+            System.out.println("Product '" + product.getName() + "' added.");
+        } else {
+            System.out.println("Stock is full. Cannot add more products.");
+        }
+    }
+
+    public void viewStock() {
+        System.out.println("\nCURRENT STOCK");
+        System.out.println("ID\tName\tPrice\tQuantity");
+        
+        // Loop from 0 to productCount
+        for (int i = 0; i < productCount; i++) {
+            Product p = productList[i];
+            int q = productQuantity[i];
+            // POLYMORPHISM: p.display() calls the correct method
+            // (either Product's or TaxableProduct's)
+            System.out.print(p.getId() + "\t" + p.getName() + "\t" + p.getPrice() + "\t" + q);
+            
+            // We must check the TYPE of product to display tax info
+            if (p instanceof TaxableProduct) {
+                 System.out.println("\t(Taxable)");
+            } else {
+                 System.out.println(); // Just a new line
+            }
+        }
+    }
+
+    // Finds a product by looping through the array
+    public Product getProductById(String id) {
+        for (int i = 0; i < productCount; i++) {
+            if (productList[i].getId().equals(id)) {
+                return productList[i];
+            }
+        }
+        return null; // Not found
+    }
+
+    public boolean isStockAvailable(String id, int quantity) {
+        for (int i = 0; i < productCount; i++) {
+            if (productList[i].getId().equals(id)) {
+                return productQuantity[i] >= quantity;
+            }
+        }
+        return false;
+    }
+
+    public void decreaseStock(String id, int quantity) {
+        for (int i = 0; i < productCount; i++) {
+            if (productList[i].getId().equals(id)) {
+                productQuantity[i] = productQuantity[i] - quantity;
+                return; // Exit the method
+            }
+        }
+    }
+}
+
+//---------------------------------------------------------------------
+// 5. INVOICE CLASS (Encapsulation with Arrays)
+//---------------------------------------------------------------------
+class Invoice {
+    private String customerName;
+    private String customerContact;
+    
+    // Replaced List with a simple array
+    private LineItem[] items = new LineItem[20]; // Max 20 items per bill
+    private int itemCount = 0;
+    
+    private double subTotal;
+    private double totalTax;
+    private double grandTotal;
+
+    public Invoice(String name, String contact) {
+        this.customerName = name;
+        this.customerContact = contact;
+    }
+
+    public void addItem(Product product, int quantity) {
+        if (itemCount < items.length) {
+            items[itemCount] = new LineItem(product, quantity);
+            itemCount++; // Increment item count
+            System.out.println("Added " + quantity + " x " + product.getName());
+        } else {
+            System.out.println("Invoice is full. Cannot add more items.");
+        }
+    }
+
+    public void calculateTotal() {
+        subTotal = 0.0;
+        grandTotal = 0.0;
+        totalTax = 0.0;
+
+        for (int i = 0; i < itemCount; i++) {
+            LineItem item = items[i];
+            Product product = item.getProduct();
+            int quantity = item.getQuantity();
+
+            double basePrice = product.getPrice() * quantity;
+            // POLYMORPHISM: Calls the correct getFinalPrice()
+            double finalPrice = product.getFinalPrice(quantity);
+
+            subTotal = subTotal + basePrice;
+            grandTotal = grandTotal + finalPrice;
+            totalTax = totalTax + (finalPrice - basePrice); // Add up the tax
+        }
+    }
+
+    // Simplified print method. No files, no fancy dates.
+    public void printInvoice() {
+        System.out.println("\nSUPERMART INC.");
+        System.out.println("Bill To: " + customerName);
+        System.out.println("Contact: " + customerContact);
+        System.out.println("\nItems:");
+        System.out.println("Qty\tItem\t\tPrice\tAmount");
+
+        // Loop up to itemCount
+        for (int i = 0; i < itemCount; i++) {
+            LineItem item = items[i];
+            Product p = item.getProduct();
+            int q = item.getQuantity();
+            
+            System.out.println(
+                q + "\t" + 
+                p.getName() + "\t\t" + 
+                p.getPrice() + "\t" + 
+                p.getFinalPrice(q)
+            );
+        }
+
+        System.out.println("\nSubtotal: \t" + subTotal);
+        System.out.println("Total Tax: \t" + totalTax);
+        System.out.println("GRAND TOTAL: \t" + grandTotal);
+        System.out.println("\nThank you for shopping with us!\n");
+    }
+}
+
+//---------------------------------------------------------------------
+// 6. USER ABSTRACT CLASS (Abstraction and Inheritance)
+//---------------------------------------------------------------------
+/**
+ * ABSTRACTION: This is an 'abstract class'.
+ * It provides a template for Admin and Cashier.
+ * You cannot create a 'new User()' object.
+ */
+abstract class User {
+    protected String username;
+    protected String password;
+
+    public User(String username, String password) {
+        this.username = username;
+        this.password = password;
+    }
+
+    public boolean login(String user, String pass) {
+        return username.equals(user) && password.equals(pass);
+    }
+
+    // ABSTRACT METHOD: Any child class MUST create this method.
+    public abstract void showMenu(Scanner scanner, BillingSystem system);
+}
+
+//---------------------------------------------------------------------
+// 7. ADMIN CLASS (Inheritance)
+//---------------------------------------------------------------------
+/**
+ * INHERITANCE: Admin 'extends' User.
+ */
+class Admin extends User {
+    public Admin(String username, String password) {
+        super(username, password);
+    }
+
+    /**
+     * POLYMORPHISM (Override): Implements the abstract method from User.
+     */
+    @Override
+    public void showMenu(Scanner scanner, BillingSystem system) {
+        boolean loggedIn = true;
+        while (loggedIn) {
+            System.out.println("\n--- ADMIN MENU ---");
+            System.out.println("  1. Add New Product");
+            System.out.println("  2. View Stock");
+            System.out.println("  3. Logout");
+            System.out.print("Enter your choice: ");
+
+            int choice = scanner.nextInt();
+            scanner.nextLine(); // Consume the newline
+
+            switch (choice) {
+                case 1:
+                    system.adminAddProduct(scanner);
+                    break;
+                case 2:
+                    system.getStock().viewStock();
+                    break;
+                case 3:
+                    loggedIn = false;
+                    break;
+                default:
+                    System.out.println("Invalid choice.");
+            }
+        }
+    }
+}
+
+//---------------------------------------------------------------------
+// 8. CASHIER CLASS (Inheritance)
+//---------------------------------------------------------------------
+/**
+ * INHERITANCE: Cashier 'extends' User.
+ */
+class Cashier extends User {
+    public Cashier(String username, String password) {
+        super(username, password);
+    }
+
+    /**
+     * POLYMORPHISM (Override): Implements the abstract method from User.
+     */
+    @Override
+    public void showMenu(Scanner scanner, BillingSystem system) {
+        boolean loggedIn = true;
+        while (loggedIn) {
+            System.out.println("\n--- CASHIER MENU ---");
+            System.out.println("  1. Create New Invoice");
+            System.out.println("  2. Logout");
+            System.out.print("Enter your choice: ");
+
+            int choice = scanner.nextInt();
+            scanner.nextLine(); // Consume the newline
+
+            switch (choice) {
+                case 1:
+                    system.cashierCreateInvoice(scanner);
+                    break;
+                case 2:
+                    loggedIn = false;
+                    break;
+                default:
+                    System.out.println("Invalid choice.");
+            }
+        }
+    }
+}
