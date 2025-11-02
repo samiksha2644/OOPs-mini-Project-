@@ -1,4 +1,7 @@
 import java.util.Scanner;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
 
 //---------------------------------------------------------------------
 // BILLINGSYSTEM CLASS (Main Class)
@@ -13,7 +16,7 @@ public class BillingSystem {
     // Replaced List with a simple array for users
     private User[] users = new User[10]; // Max 10 users
     private int userCount = 0;
-    
+
     private User currentUser;
     private Scanner scanner;
 
@@ -68,13 +71,13 @@ public class BillingSystem {
         System.out.println("\n--- Add New Product ---");
         System.out.print("Enter Product ID: ");
         String id = scanner.nextLine();
-        
+
         // Check if product ID already exists
         if (stock.getProductById(id) != null) {
             System.out.println("Error: This Product ID already exists.");
             return;
         }
-        
+
         System.out.print("Enter Product Name: ");
         String name = scanner.nextLine();
         System.out.print("Enter Price: ");
@@ -106,7 +109,7 @@ public class BillingSystem {
         Invoice invoice = new Invoice(custName, custContact);
 
         String addMore = "yes";
-        
+
         // Use a 'while' loop instead of 'do-while'
         while (addMore.equals("yes") || addMore.equals("y")) {
             stock.viewStock();
@@ -128,14 +131,46 @@ public class BillingSystem {
                     stock.decreaseStock(productId, quantity);
                 }
             }
-            
+
             System.out.print("Add another item? (yes/no): ");
             addMore = scanner.nextLine();
         }
 
         System.out.println("Finalizing Invoice...");
         invoice.calculateTotal();
+
+        // 1. Print to console
         invoice.printInvoice();
+
+        // 2. Save to file (NEW FEATURE)
+        saveInvoiceToFile(invoice);
+    }
+
+    // --- NEW METHOD FOR FILE HANDLING ---
+    /**
+     * Saves the generated invoice to a text file.
+     * The file will be named based on the customer.
+     * It will overwrite any existing file with the same name.
+     */
+    private void saveInvoiceToFile(Invoice invoice) {
+        // Create a filename from the customer name. Replace spaces with underscores.
+        String fileName = invoice.getCustomerName().replaceAll("\\s+", "_") + "_invoice.txt";
+        String content = invoice.getInvoiceAsString();
+
+        // Use try-with-resources to automatically close the writer
+        // new FileWriter(fileName, false) -> false means OVERWRITE
+        try (FileWriter fw = new FileWriter(fileName, false);
+             BufferedWriter bw = new BufferedWriter(fw)) {
+
+            bw.write(content);
+            System.out.println("---");
+            System.out.println("Invoice successfully saved to file: " + fileName);
+            System.out.println("---");
+
+        } catch (IOException e) {
+            System.err.println("Error: Could not save invoice to file.");
+            e.printStackTrace();
+        }
     }
 
     // ABSTRACTION: The main run loop.
@@ -147,7 +182,7 @@ public class BillingSystem {
                 System.out.println("  1. Login");
                 System.out.println("  2. Exit");
                 System.out.print("Enter your choice: ");
-                
+
                 int choice = scanner.nextInt();
                 scanner.nextLine(); // Consume the newline
 
@@ -299,7 +334,7 @@ class Stock {
     public void viewStock() {
         System.out.println("\nCURRENT STOCK");
         System.out.println("ID\tName\tPrice\tQuantity");
-        
+
         // Loop from 0 to productCount
         for (int i = 0; i < productCount; i++) {
             Product p = productList[i];
@@ -307,12 +342,12 @@ class Stock {
             // POLYMORPHISM: p.display() calls the correct method
             // (either Product's or TaxableProduct's)
             System.out.print(p.getId() + "\t" + p.getName() + "\t" + p.getPrice() + "\t" + q);
-            
+
             // We must check the TYPE of product to display tax info
             if (p instanceof TaxableProduct) {
-                 System.out.println("\t(Taxable)");
+                System.out.println("\t(Taxable)");
             } else {
-                 System.out.println(); // Just a new line
+                System.out.println(); // Just a new line
             }
         }
     }
@@ -352,11 +387,11 @@ class Stock {
 class Invoice {
     private String customerName;
     private String customerContact;
-    
+
     // Replaced List with a simple array
     private LineItem[] items = new LineItem[20]; // Max 20 items per bill
     private int itemCount = 0;
-    
+
     private double subTotal;
     private double totalTax;
     private double grandTotal;
@@ -364,6 +399,11 @@ class Invoice {
     public Invoice(String name, String contact) {
         this.customerName = name;
         this.customerContact = contact;
+    }
+
+    // --- ADDED GETTER ---
+    public String getCustomerName() {
+        return customerName;
     }
 
     public void addItem(Product product, int quantity) {
@@ -396,32 +436,49 @@ class Invoice {
         }
     }
 
-    // Simplified print method. No files, no fancy dates.
-    public void printInvoice() {
-        System.out.println("\nSUPERMART INC.");
-        System.out.println("Bill To: " + customerName);
-        System.out.println("Contact: " + customerContact);
-        System.out.println("\nItems:");
-        System.out.println("Qty\tItem\t\tPrice\tAmount");
+    // --- NEW METHOD: Generates the invoice as a String ---
+    /**
+     * Builds the entire invoice content as a single String.
+     * This can be used for both printing and saving to a file.
+     * @return A String representing the formatted invoice.
+     */
+    public String getInvoiceAsString() {
+        // Use StringBuilder for efficient string building
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("\nSUPERMART INC.\n");
+        sb.append("Bill To: ").append(customerName).append("\n");
+        sb.append("Contact: ").append(customerContact).append("\n");
+        sb.append("\nItems:\n");
+        sb.append("Qty\tItem\t\tPrice\tAmount\n");
+        sb.append("---------------------------------------\n");
 
         // Loop up to itemCount
         for (int i = 0; i < itemCount; i++) {
             LineItem item = items[i];
             Product p = item.getProduct();
             int q = item.getQuantity();
-            
-            System.out.println(
-                q + "\t" + 
-                p.getName() + "\t\t" + 
-                p.getPrice() + "\t" + 
-                p.getFinalPrice(q)
-            );
+
+            sb.append(q).append("\t")
+                    .append(p.getName()).append("\t\t")
+                    .append(p.getPrice()).append("\t")
+                    .append(p.getFinalPrice(q))
+                    .append("\n");
         }
 
-        System.out.println("\nSubtotal: \t" + subTotal);
-        System.out.println("Total Tax: \t" + totalTax);
-        System.out.println("GRAND TOTAL: \t" + grandTotal);
-        System.out.println("\nThank you for shopping with us!\n");
+        sb.append("---------------------------------------\n");
+        sb.append("\nSubtotal: \t").append(subTotal).append("\n");
+        sb.append("Total Tax: \t").append(totalTax).append("\n");
+        sb.append("GRAND TOTAL: \t").append(grandTotal).append("\n");
+        sb.append("\nThank you for shopping with us!\n");
+
+        return sb.toString();
+    }
+
+    // --- MODIFIED METHOD ---
+    // This method now uses getInvoiceAsString() to print.
+    public void printInvoice() {
+        System.out.println(getInvoiceAsString());
     }
 }
 
