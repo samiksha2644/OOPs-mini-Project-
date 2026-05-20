@@ -1,4 +1,4 @@
-# OOPs-mini-Project-
+# Smart-Billing-Sytem
 
 Supermart Billing System (Java)
 This is a simple, console-based Supermart Billing System written in Java. It was developed as a mini-project to apply and demonstrate fundamental Object-Oriented Programming (OOP) concepts.
